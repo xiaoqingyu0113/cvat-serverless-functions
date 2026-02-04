@@ -1,0 +1,42 @@
+metadata:
+  name: longlense_incourt_20251023
+  namespace: cvat
+  annotations:
+    name: longlense_incourt_20251023
+    type: detector
+    spec: |
+      [
+        { "id": 0, "name": "tennis" },
+        { "id": 1, "name": "person" }
+      ]
+
+spec:
+  description: YOLOv11 Tennis Detector
+  runtime: python
+  handler: main:handler
+  eventTimeout: 30s
+
+  env:
+    - name: MODEL_PATH
+      value: "/opt/nuclio/longlense_incourt_20251023.pt"
+
+  resources:
+    limits:
+      nvidia.com/gpu: 1  # Request 1 GPU
+
+  build:
+    baseImage: ultralytics/ultralytics:latest
+
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume
+
+  triggers:
+    myHttpTrigger:
+      kind: http
+      maxWorkers: 4
+      attributes:
+        serviceType: nodePort

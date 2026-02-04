@@ -1,0 +1,42 @@
+metadata:
+  name: yolov11-tennis-gpu
+  namespace: cvat
+  annotations:
+    name: yolov11-tennis-gpu
+    type: detector
+    spec: |
+      [
+        { "id": 0, "name": "tennis" },
+        { "id": 1, "name": "person" }
+      ]
+
+spec:
+  description: YOLOv11 Tennis Detector
+  runtime: python
+  handler: main:handler
+  eventTimeout: 30s
+
+  env:
+    - name: MODEL_PATH
+      value: "/opt/nuclio/best.pt"
+
+  resources:
+    limits:
+      nvidia.com/gpu: 1  # Request 1 GPU
+
+  build:
+    baseImage: ultralytics/ultralytics:latest
+    noCache: true
+  platform:
+    attributes:
+      restartPolicy:
+        name: always
+        maximumRetryCount: 3
+      mountMode: volume
+
+  triggers:
+    myHttpTrigger:
+      kind: http
+      maxWorkers: 2
+      attributes:
+        serviceType: nodePort
