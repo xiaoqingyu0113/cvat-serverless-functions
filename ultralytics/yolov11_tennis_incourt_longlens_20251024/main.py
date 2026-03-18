@@ -2,11 +2,19 @@ import os
 import io
 import json
 import base64
-import numpy as np
+import traceback
 from PIL import Image
 from ultralytics import YOLO
 import torch
 import ultralytics
+
+
+def get_function_labels():
+    labels_spec = os.getenv("FUNCTION_LABELS")
+    if not labels_spec:
+        raise ValueError("FUNCTION_LABELS env var is not set")
+
+    return {int(item["id"]): item["name"] for item in json.loads(labels_spec)}
 
 
 def init_context(context):
@@ -71,6 +79,7 @@ def handler(context, event):
         # Run YOLO prediction
         model = context.user_data.model_handler
         context.logger.info(f"Model device: {model.device}, names: {model.names}")
+        labels = get_function_labels()
 
         results = model.predict(img, conf=threshold, imgsz=1280, verbose=False)
 
@@ -81,18 +90,26 @@ def handler(context, event):
         for r in results:
             boxes = r.boxes.xyxy.cpu().numpy()
             scores = r.boxes.conf.cpu().numpy()
-            labels = r.boxes.cls.cpu().numpy()
+            label_ids = r.boxes.cls.cpu().numpy()
 
-            for box, score, label in zip(boxes, scores, labels):
+            for box, score, label in zip(boxes, scores, label_ids):
                 if score >= threshold:
+                    label_idx = int(label)
+                    model_label_name = model.names[label_idx]
+                    if label_idx not in labels:
+                        context.logger.info(
+                            f"Skipping undeclared class: model={model_label_name} ({score:.3f})"
+                        )
+                        continue
+
                     total_detections += 1
-                    label_name = model.names[int(label)]
+                    label_name = labels[label_idx]
                     context.logger.info(
-                        f"Detection: {label_name} ({score:.3f}) "
+                        f"Detection: model={model_label_name}, output={label_name} ({score:.3f}) "
                         f"at box: {box.tolist()}"
                     )
                     output.append({
-                        "confidence": float(score),
+                        "confidence": str(float(score)),
                         "label": label_name,
                         "points": box.tolist(),
                         "type": "rectangle",
@@ -108,7 +125,8 @@ def handler(context, event):
         )
 
     except Exception as e:
-        context.logger.error(f"❌ Inference failed: {e}", exc_info=True)
+        context.logger.error(f"❌ Inference failed: {e}")
+        context.logger.error(traceback.format_exc())
         return context.Response(
             body=json.dumps({"error": str(e)}),
             headers={},
