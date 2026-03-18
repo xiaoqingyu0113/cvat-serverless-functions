@@ -1,31 +1,51 @@
 metadata:
-  name: longlense_incourt_20251023
+  name: 20251104_incourt_noisy
   namespace: cvat
   annotations:
-    name: longlense_incourt_20251023
+    name: 20251104_incourt_noisy
     type: detector
     spec: |
       [
-        { "id": 0, "name": "tennis" },
-        { "id": 1, "name": "person" }
+        { "id": 0, "name": "tennis_ball", "type": "rectangle" }
       ]
 
 spec:
   description: YOLOv11 Tennis Detector
-  runtime: python
+  runtime: 'python:3.10'
   handler: main:handler
   eventTimeout: 30s
 
   env:
     - name: MODEL_PATH
-      value: "/opt/nuclio/longlense_incourt_20251023.pt"
+      value: "/opt/nuclio/20251104_incourt_noisy.pt"
+    - name: FUNCTION_LABELS
+      value: '[{"id": 0, "name": "tennis_ball", "type": "rectangle"}]'
 
   resources:
     limits:
       nvidia.com/gpu: 1  # Request 1 GPU
 
   build:
-    baseImage: ultralytics/ultralytics:latest
+    image: cvat.pth.tennis_yolo:latest-gpu
+    baseImage: nvidia/cuda:12.6.3-cudnn-runtime-ubuntu22.04
+    directives:
+      preCopy:
+        - kind: ENV
+          value: NVIDIA_VISIBLE_DEVICES=all
+        - kind: ENV
+          value: NVIDIA_DRIVER_CAPABILITIES=compute,utility
+        - kind: ENV
+          value: DEBIAN_FRONTEND=noninteractive
+        - kind: WORKDIR
+          value: /opt/nuclio
+        - kind: RUN
+          value: apt-get update && apt-get install --no-install-recommends -y python3 python3-pip python-is-python3 libgl1 libglib2.0-0 libsm6 libxext6 libxrender1 && rm -rf /var/lib/apt/lists/*
+        - kind: RUN
+          value: pip install --no-cache-dir --upgrade pip setuptools wheel
+        - kind: RUN
+          value: pip install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+        - kind: RUN
+          value: pip install --no-cache-dir ultralytics pillow
 
   platform:
     attributes:
@@ -37,6 +57,6 @@ spec:
   triggers:
     myHttpTrigger:
       kind: http
-      maxWorkers: 4
+      NumWorkers: 4
       attributes:
         serviceType: nodePort
